@@ -476,7 +476,7 @@ ipc_get_addr(void *arg, void *buf, size_t *szp, nni_type t)
 	if (getsockname(fd, (void *) &ss, &sslen) != 0) {
 		return (nni_plat_errno(errno));
 	}
-	if ((rv = nni_posix_sockaddr2nn(&sa, &ss)) != 0) {
+	if ((rv = nni_posix_sockaddr2nn(&sa, &ss, sslen)) != 0) {
 		return (rv);
 	}
 	return (nni_copyout_sockaddr(&sa, buf, szp, t));

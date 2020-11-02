@@ -1142,8 +1142,55 @@ static nni_tran ipc_tran = {
 	.tran_checkopt = ipctran_checkopt,
 };
 
+static nni_tran ipc_tran_unix = {
+	.tran_version  = NNI_TRANSPORT_VERSION,
+	.tran_scheme   = "unix",
+	.tran_dialer   = &ipctran_dialer_ops,
+	.tran_listener = &ipctran_listener_ops,
+	.tran_pipe     = &ipctran_pipe_ops,
+	.tran_init     = ipctran_init,
+	.tran_fini     = ipctran_fini,
+	.tran_checkopt = ipctran_checkopt,
+};
+
+#ifdef NNG_HAVE_ABSTRACT_SOCKETS
+static nni_tran ipc_tran_abstract = {
+	.tran_version  = NNI_TRANSPORT_VERSION,
+	.tran_scheme   = "ipc+abstract",
+	.tran_dialer   = &ipctran_dialer_ops,
+	.tran_listener = &ipctran_listener_ops,
+	.tran_pipe     = &ipctran_pipe_ops,
+	.tran_init     = ipctran_init,
+	.tran_fini     = ipctran_fini,
+	.tran_checkopt = ipctran_checkopt,
+};
+
+static nni_tran ipc_tran_unix_abstract = {
+	.tran_version  = NNI_TRANSPORT_VERSION,
+	.tran_scheme   = "unix+abstract",
+	.tran_dialer   = &ipctran_dialer_ops,
+	.tran_listener = &ipctran_listener_ops,
+	.tran_pipe     = &ipctran_pipe_ops,
+	.tran_init     = ipctran_init,
+	.tran_fini     = ipctran_fini,
+	.tran_checkopt = ipctran_checkopt,
+};
+#endif
+
 int
 nng_ipc_register(void)
 {
-	return (nni_tran_register(&ipc_tran));
+	int rv;
+	if (((rv = nni_tran_register(&ipc_tran)) != 0) ||
+	    ((rv = nni_tran_register(&ipc_tran_unix)) != 0)) {
+		return (rv);
+	}
+#ifdef NNG_HAVE_ABSTRACT_SOCKETS
+	if (((rv = nni_tran_register(&ipc_tran_abstract)) != 0) ||
+	    ((rv = nni_tran_register(&ipc_tran_unix_abstract)) != 0)) {
+		return (rv);
+	}
+#endif
+
+	return (0);
 }

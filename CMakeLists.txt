@@ -193,6 +193,7 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux")
     add_definitions(-DNNG_PLATFORM_POSIX)
     add_definitions(-DNNG_PLATFORM_LINUX)
     add_definitions(-DNNG_USE_EVENTFD)
+    add_definitions(-DNNG_HAVE_ABSTRACT_SOCKETS)
     # Windows subsystem for Linux -- smells like Linux, but it has
     # some differences (SO_REUSEADDR for one).
     if (CMAKE_SYSTEM_VERSION MATCHES "Microsoft")

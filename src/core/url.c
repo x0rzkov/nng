@@ -1,5 +1,5 @@
 //
-// Copyright 2019 Staysail Systems, Inc. <info@staysail.tech>
+// Copyright 2020 Staysail Systems, Inc. <info@staysail.tech>
 // Copyright 2018 Capitar IT Group BV <info@capitar.com>
 //
 // This software is supplied under the terms of the MIT License, a
@@ -17,7 +17,7 @@
 
 #include "url.h"
 
-static char
+static uint8_t
 url_hexval(char c)
 {
 	if ((c >= '0') && (c <= '9')) {
@@ -44,21 +44,21 @@ url_utf8_validate(void *arg)
 	int      nb;
 
 	while (*s) {
-		if ((s[0] & 0x80) == 0) {
+		if ((s[0] & 0x80u) == 0) {
 			s++;
 			continue;
 		}
-		if ((s[0] & 0xe0) == 0xc0) {
+		if ((s[0] & 0xe0u) == 0xc0) {
 			// 0x80 thru 0x7ff
-			v    = (s[0] & 0x1f);
+			v    = (s[0] & 0x1fu);
 			minv = 0x80;
 			nb   = 1;
-		} else if ((s[0] & 0xf0) == 0xe0) {
-			v    = (s[0] & 0xf);
+		} else if ((s[0] & 0xf0u) == 0xe0) {
+			v    = (s[0] & 0xfu);
 			minv = 0x800;
 			nb   = 2;
-		} else if ((s[0] & 0xf8) == 0xf0) {
-			v    = (s[0] & 0x7);
+		} else if ((s[0] & 0xf8u) == 0xf0) {
+			v    = (s[0] & 0x7u);
 			minv = 0x10000;
 			nb   = 3;
 		} else {
@@ -68,12 +68,12 @@ url_utf8_validate(void *arg)
 		}
 		s++;
 		for (int i = 0; i < nb; i++) {
-			if ((s[0] & 0xc0) != 0x80) {
+			if ((s[0] & 0xc0u) != 0x80) {
 				return (NNG_EINVAL); // not continuation
 			}
 			s++;
-			v <<= 6;
-			v += s[0] & 0x3f;
+			v <<= 6u;
+			v += s[0] & 0x3fu;
 		}
 		if (v < minv) {
 			return (NNG_EINVAL);
@@ -88,14 +88,42 @@ url_utf8_validate(void *arg)
 	return (0);
 }
 
+size_t
+nni_url_decode(uint8_t *out, const char *in, size_t max_len)
+{
+	size_t  len;
+	uint8_t c;
+
+	len = 0;
+	while ((c = (uint8_t) *in) != '\0') {
+		if (len >= max_len) {
+			return ((size_t) -1);
+		}
+		if (c == '%') {
+			if (!isxdigit(in[1]) || !isxdigit(in[2])) {
+				return ((size_t) -1);
+			}
+			in++;
+			out[len] = *in++;
+			out[len] <<= 4u;
+			out[len] += *in++;
+		} else {
+			out[len++] = c;
+			in++;
+		}
+		len++;
+	}
+	return (len);
+}
+
 static int
 url_canonify_uri(char **outp, const char *in)
 {
-	char * out;
-	size_t src, dst, len;
-	int    c;
-	int    rv;
-	bool   skip;
+	char *  out;
+	size_t  src, dst, len;
+	uint8_t c;
+	int     rv;
+	bool    skip;
 
 	// We know that the transform is strictly "reducing".
 	if ((out = nni_strdup(in)) == NULL) {
@@ -127,8 +155,8 @@ url_canonify_uri(char **outp, const char *in)
 				out[dst++] = (char) c;
 			} else {
 				out[dst++] = '%';
-				out[dst++] = (char) toupper(out[src + 1]);
-				out[dst++] = (char) toupper(out[src + 2]);
+				out[dst++] = toupper((uint8_t) out[src + 1]);
+				out[dst++] = toupper((uint8_t) out[src + 2]);
 			}
 			src += 3;
 			continue;
@@ -388,7 +416,6 @@ nni_url_parse(nni_url **urlp, const char *raw)
 	url->u_path[len] = '\0';
 
 	s += len;
-	len = 0;
 
 	// Look for query info portion.
 	if (s[0] == '?') {

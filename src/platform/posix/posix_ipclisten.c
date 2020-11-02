@@ -188,8 +188,12 @@ ipc_remove_stale(const char *path)
 	struct sockaddr_un sa;
 	size_t             sz;
 
+	if (path == NULL) {
+		return (0);
+	}
+
 	sa.sun_family = AF_UNIX;
-	sz             = sizeof(sa.sun_path);
+	sz            = sizeof(sa.sun_path);
 
 	if (nni_strlcpy(sa.sun_path, path, sz) >= sz) {
 		return (NNG_EADDRINVAL);
@@ -230,6 +234,11 @@ ipc_listener_set_perms(void *arg, const void *buf, size_t sz, nni_type t)
 
 	if ((rv = nni_copyin_int(&mode, buf, sz, 0, S_IFMT, t)) != 0) {
 		return (rv);
+	}
+	if (l->sa.s_family == NNG_AF_ABSTRACT) {
+		// We ignore permissions on abstract sockets.
+		// They succeed, but have no effect.
+		return (0);
 	}
 	if ((mode & S_IFMT) != 0) {
 		return (NNG_EINVAL);
@@ -284,7 +293,7 @@ ipc_listener_listen(void *arg)
 	int                     rv;
 	int                     fd;
 	nni_posix_pfd *         pfd;
-	char *                  path;
+	char *                  path = NULL;
 
 	if (((len = nni_posix_nn2sockaddr(&ss, &l->sa)) == 0) ||
 	    (ss.ss_family != AF_UNIX)) {
@@ -300,9 +309,11 @@ ipc_listener_listen(void *arg)
 		nni_mtx_unlock(&l->mtx);
 		return (NNG_ECLOSED);
 	}
-	path = nni_strdup(l->sa.s_ipc.sa_path);
-	if (path == NULL) {
-		return (NNG_ENOMEM);
+	if (l->sa.s_family == NNG_AF_IPC) {
+		path = nni_strdup(l->sa.s_ipc.sa_path);
+		if (path == NULL) {
+			return (NNG_ENOMEM);
+		}
 	}
 
 	if ((fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0)) < 0) {
@@ -320,7 +331,8 @@ ipc_listener_listen(void *arg)
 	}
 
 	if ((rv = bind(fd, (struct sockaddr *) &ss, len)) != 0) {
-		if ((errno == EEXIST) || (errno == EADDRINUSE)) {
+		if (((errno == EEXIST) || (errno == EADDRINUSE)) &&
+		    (l->sa.s_family == NNG_AF_IPC)) {
 			ipc_remove_stale(path);
 			rv = bind(fd, (struct sockaddr *) &ss, len);
 		}
@@ -336,7 +348,9 @@ ipc_listener_listen(void *arg)
 	if (((l->perms != 0) && (chmod(path, l->perms & ~S_IFMT) != 0)) ||
 	    (listen(fd, 128) != 0)) {
 		rv = nni_plat_errno(errno);
-		(void) unlink(path);
+		if (path != NULL) {
+			(void) unlink(path);
+		}
 		nni_mtx_unlock(&l->mtx);
 		nni_strfree(path);
 		nni_posix_pfd_fini(pfd);
@@ -412,26 +426,50 @@ int
 nni_ipc_listener_alloc(nng_stream_listener **lp, const nng_url *url)
 {
 	ipc_listener *l;
-
-	if ((strcmp(url->u_scheme, "ipc") != 0) || (url->u_path == NULL) ||
-	    (strlen(url->u_path) == 0) ||
-	    (strlen(url->u_path) >= NNG_MAXADDRLEN)) {
-		return (NNG_EADDRINVAL);
-	}
+	size_t        len;
 
 	if ((l = NNI_ALLOC_STRUCT(l)) == NULL) {
 		return (NNG_ENOMEM);
 	}
 
+	if ((strcmp(url->u_scheme, "ipc") == 0) ||
+	    (strcmp(url->u_scheme, "unix") == 0)) {
+		if ((url->u_path == NULL) ||
+		    ((len = strlen(url->u_path)) == 0) ||
+		    (len > NNG_MAXADDRLEN)) {
+			NNI_FREE_STRUCT(l);
+			return (NNG_EADDRINVAL);
+		}
+		l->sa.s_ipc.sa_family = NNG_AF_IPC;
+		nni_strlcpy(l->sa.s_ipc.sa_path, url->u_path, NNG_MAXADDRLEN);
+
+#ifdef NNG_HAVE_ABSTRACT_SOCKETS
+	} else if ((strcmp(url->u_scheme, "ipc+abstract") == 0) ||
+	    (strcmp(url->u_scheme, "unix+abstract") == 0)) {
+		// path is url encoded.
+		len = nni_url_decode(l->sa.s_abstract.sa_name, url->u_path,
+		    sizeof(l->sa.s_abstract.sa_name));
+		if (len == (size_t) -1) {
+			NNI_FREE_STRUCT(l);
+			return (NNG_EADDRINVAL);
+		}
+
+		l->sa.s_abstract.sa_family = NNG_AF_ABSTRACT;
+		l->sa.s_abstract.sa_len    = len;
+#endif
+
+	} else {
+		NNI_FREE_STRUCT(l);
+		return (NNG_EADDRINVAL);
+	}
+
 	nni_mtx_init(&l->mtx);
 	nni_aio_list_init(&l->acceptq);
 
-	l->pfd                = NULL;
-	l->closed             = false;
-	l->started            = false;
-	l->perms              = 0;
-	l->sa.s_ipc.sa_family = NNG_AF_IPC;
-	strcpy(l->sa.s_ipc.sa_path, url->u_path);
+	l->pfd          = NULL;
+	l->closed       = false;
+	l->started      = false;
+	l->perms        = 0;
 	l->sl.sl_free   = ipc_listener_free;
 	l->sl.sl_close  = ipc_listener_close;
 	l->sl.sl_listen = ipc_listener_listen;
