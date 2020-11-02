@@ -312,6 +312,7 @@ ipc_listener_listen(void *arg)
 	if (l->sa.s_family == NNG_AF_IPC) {
 		path = nni_strdup(l->sa.s_ipc.sa_path);
 		if (path == NULL) {
+			nni_mtx_unlock(&l->mtx);
 			return (NNG_ENOMEM);
 		}
 	}
