@@ -284,7 +284,8 @@ ipc_listener_setx(
 	return (nni_setopt(ipc_listener_options, name, l, buf, sz, t));
 }
 
-int
+#ifndef NNG_PLATFORM_LINUX
+static int
 ipc_listener_chmod(ipc_listener *l, const char *path)
 {
 	if (path == NULL) {
@@ -294,10 +295,11 @@ ipc_listener_chmod(ipc_listener *l, const char *path)
 		return (0);
 	}
 	if (chmod(path, l->perms & ~S_IFMT) != 0) {
-		return (nni_plat_errno(errno));
+		return (-1);
 	}
 	return (0);
 }
+#endif
 
 int
 ipc_listener_listen(void *arg)
@@ -308,11 +310,9 @@ ipc_listener_listen(void *arg)
 	int                     rv;
 	int                     fd;
 	nni_posix_pfd *         pfd;
-	char *                  path  = NULL;
-	bool                    bound = false;
+	char *                  path;
 
-	if (((len = nni_posix_nn2sockaddr(&ss, &l->sa)) == 0) ||
-	    (ss.ss_family != AF_UNIX)) {
+	if ((len = nni_posix_nn2sockaddr(&ss, &l->sa)) < sizeof(sa_family_t)) {
 		return (NNG_EADDRINVAL);
 	}
 
@@ -325,12 +325,20 @@ ipc_listener_listen(void *arg)
 		nni_mtx_unlock(&l->mtx);
 		return (NNG_ECLOSED);
 	}
-	if (l->sa.s_family == NNG_AF_IPC) {
-		path = nni_strdup(l->sa.s_ipc.sa_path);
-		if (path == NULL) {
+
+	switch (l->sa.s_family) {
+	case NNG_AF_IPC:
+		if ((path = nni_strdup(l->sa.s_ipc.sa_path)) == NULL) {
 			nni_mtx_unlock(&l->mtx);
 			return (NNG_ENOMEM);
 		}
+		break;
+	case NNG_AF_ABSTRACT:
+		path = NULL;
+		break;
+	default:
+		nni_mtx_unlock(&l->mtx);
+		return (NNG_EADDRINVAL);
 	}
 
 	if ((fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0)) < 0) {
@@ -339,37 +347,45 @@ ipc_listener_listen(void *arg)
 		nni_strfree(path);
 		return (rv);
 	}
-
-	if ((rv = nni_posix_pfd_init(&pfd, fd)) != 0) {
-		nni_mtx_unlock(&l->mtx);
-		nni_strfree(path);
-		(void) close(fd);
-		return (rv);
+	// Linux supports fchmod on a socket, which will
+	// be race condition free.
+#ifdef NNG_PLATFORM_LINUX
+	if ((l->perms != 0) && (path != NULL)) {
+		if (fchmod(fd, l->perms & ~S_IFMT) != 0) {
+			rv = nni_plat_errno(errno);
+			nni_mtx_unlock(&l->mtx);
+			(void) close(fd);
+			nni_strfree(path);
+			return (rv);
+		}
 	}
+#endif
 
 	if ((rv = bind(fd, (struct sockaddr *) &ss, len)) != 0) {
-		if (((errno == EEXIST) || (errno == EADDRINUSE)) &&
-		    (l->sa.s_family == NNG_AF_IPC)) {
+		if ((l->sa.s_family == NNG_AF_IPC) &&
+		    ((errno == EEXIST) || (errno == EADDRINUSE))) {
 			ipc_remove_stale(path);
 			rv = bind(fd, (struct sockaddr *) &ss, len);
 		}
-	}
-	if (rv == 0) {
-		bound = true;
-		rv = ipc_listener_chmod(l, path);
-	}
-	if (rv == 0) {
-		if (listen(fd, 128) != 0) {
-			rv = nni_plat_errno(errno);
+		if (rv != 0) {
+			nni_strfree(path);
+			path = NULL;
 		}
 	}
-	if (rv != 0) {
+	if ((rv != 0) ||
+#ifndef NNG_PLATFORM_LINUX
+	    (ipc_listener_chmod(l, path) != 0) ||
+#endif
+	    (listen(fd, 128) != 0)) {
+		rv = nni_plat_errno(errno);
+	}
+	if ((rv != 0) || ((rv = nni_posix_pfd_init(&pfd, fd)) != 0)) {
 		nni_mtx_unlock(&l->mtx);
-		if (bound && path != NULL) {
-                        (void) unlink(path);
+		(void) close(fd);
+		if (path != NULL) {
+			unlink(path);
 		}
 		nni_strfree(path);
-		nni_posix_pfd_fini(pfd);
 		return (rv);
 	}
 
