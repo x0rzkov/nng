@@ -100,18 +100,18 @@ nni_url_decode(uint8_t *out, const char *in, size_t max_len)
 			return ((size_t) -1);
 		}
 		if (c == '%') {
-			if (!isxdigit(in[1]) || !isxdigit(in[2])) {
+                        in++;
+			if ((!isxdigit(in[0])) || (!isxdigit(in[1]))) {
 				return ((size_t) -1);
 			}
-			in++;
-			out[len] = *in++;
+			out[len] = url_hexval(*in++);
 			out[len] <<= 4u;
-			out[len] += *in++;
+			out[len] += url_hexval(*in++);
+			len++;
 		} else {
 			out[len++] = c;
 			in++;
 		}
-		len++;
 	}
 	return (len);
 }
