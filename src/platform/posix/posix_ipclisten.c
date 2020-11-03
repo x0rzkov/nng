@@ -285,6 +285,21 @@ ipc_listener_setx(
 }
 
 int
+ipc_listener_chmod(ipc_listener *l, const char *path)
+{
+	if (path == NULL) {
+		return (0);
+	}
+	if (l->perms == 0) {
+		return (0);
+	}
+	if (chmod(path, l->perms & ~S_IFMT) != 0) {
+		return (nni_plat_errno(errno));
+	}
+	return (0);
+}
+
+int
 ipc_listener_listen(void *arg)
 {
 	ipc_listener *          l = arg;
@@ -293,7 +308,8 @@ ipc_listener_listen(void *arg)
 	int                     rv;
 	int                     fd;
 	nni_posix_pfd *         pfd;
-	char *                  path = NULL;
+	char *                  path  = NULL;
+	bool                    bound = false;
 
 	if (((len = nni_posix_nn2sockaddr(&ss, &l->sa)) == 0) ||
 	    (ss.ss_family != AF_UNIX)) {
@@ -338,21 +354,20 @@ ipc_listener_listen(void *arg)
 			rv = bind(fd, (struct sockaddr *) &ss, len);
 		}
 	}
-	if (rv != 0) {
-		rv = nni_plat_errno(errno);
-		nni_mtx_unlock(&l->mtx);
-		nni_strfree(path);
-		nni_posix_pfd_fini(pfd);
-		return (rv);
+	if (rv == 0) {
+		bound = true;
+		rv = ipc_listener_chmod(l, path);
 	}
-
-	if (((l->perms != 0) && (chmod(path, l->perms & ~S_IFMT) != 0)) ||
-	    (listen(fd, 128) != 0)) {
-		rv = nni_plat_errno(errno);
-		if (path != NULL) {
-			(void) unlink(path);
+	if (rv == 0) {
+		if (listen(fd, 128) != 0) {
+			rv = nni_plat_errno(errno);
 		}
+	}
+	if (rv != 0) {
 		nni_mtx_unlock(&l->mtx);
+		if (bound && path != NULL) {
+                        (void) unlink(path);
+		}
 		nni_strfree(path);
 		nni_posix_pfd_fini(pfd);
 		return (rv);
