@@ -8,7 +8,6 @@
 // found online at https://opensource.org/licenses/MIT.
 //
 
-#include "testutil.h"
 
 #include "acutest.h"
 
@@ -17,6 +16,8 @@
 #include <nng/nng.h>
 
 #include "core/nng_impl.h"
+
+#include "testutil.h"
 
 void
 test_url_host(void)
