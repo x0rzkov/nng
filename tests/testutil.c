@@ -158,6 +158,13 @@ testutil_scratch_addr(const char *scheme, size_t sz, char *addr)
 		return;
 	}
 
+	if (strncmp(scheme, "ipc+abstract", 3) == 0) {
+		(void) snprintf(addr, sz, "%s://testutil%04x%04x%04x%04x",
+		    scheme, nng_random(), nng_random(), nng_random(),
+		    nng_random());
+		return;
+	}
+
 	if (strncmp(scheme, "ipc", 3) == 0) {
 #ifdef _WIN32
 		// Windows doesn't place IPC names in the filesystem.
@@ -476,10 +483,10 @@ stream_xfr_alloc(nng_stream *s, void (*submit)(nng_stream *, nng_aio *),
 
 	nng_aio_begin(x->upper_aio);
 
-	x->s           = s;
-	x->rem         = size;
-	x->base        = buf;
-	x->submit      = submit;
+	x->s      = s;
+	x->rem    = size;
+	x->base   = buf;
+	x->submit = submit;
 
 	return (x);
 }

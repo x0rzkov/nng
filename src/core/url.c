@@ -100,7 +100,7 @@ nni_url_decode(uint8_t *out, const char *in, size_t max_len)
 			return ((size_t) -1);
 		}
 		if (c == '%') {
-                        in++;
+			in++;
 			if ((!isxdigit(in[0])) || (!isxdigit(in[1]))) {
 				return ((size_t) -1);
 			}
@@ -342,6 +342,9 @@ nni_url_parse(nni_url **urlp, const char *raw)
 	// we recommend using absolute paths, such as ipc:///var/run/mysocket.
 
 	if ((strcmp(url->u_scheme, "ipc") == 0) ||
+	    (strcmp(url->u_scheme, "ipc+abstract") == 0) ||
+	    (strcmp(url->u_scheme, "unix") == 0) ||
+	    (strcmp(url->u_scheme, "unix+abstract") == 0) ||
 	    (strcmp(url->u_scheme, "inproc") == 0)) {
 		if ((url->u_path = nni_strdup(s)) == NULL) {
 			rv = NNG_ENOMEM;
@@ -527,7 +530,10 @@ nni_url_asprintf(char **str, const nni_url *url)
 	const char *hostob = "";
 	const char *hostcb = "";
 
-	if ((strcmp(scheme, "ipc") == 0) || (strcmp(scheme, "inproc") == 0)) {
+	if ((strcmp(scheme, "ipc") == 0) || (strcmp(scheme, "inproc") == 0) ||
+            (strcmp(scheme, "unix") == 0) ||
+            (strcmp(scheme, "ipc+abstract") == 0) ||
+	    (strcmp(scheme, "unix+abstract") == 0)) {
 		return (nni_asprintf(str, "%s://%s", scheme, url->u_path));
 	}
 

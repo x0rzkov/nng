@@ -32,7 +32,13 @@ static struct {
 	    .listener_alloc = nni_ipc_listener_alloc,
 	    .checkopt       = nni_ipc_checkopt,
 	},
-	{
+        {
+            .scheme         = "ipc+abstract",
+            .dialer_alloc   = nni_ipc_dialer_alloc,
+            .listener_alloc = nni_ipc_listener_alloc,
+            .checkopt       = nni_ipc_checkopt,
+        },
+        {
 	    .scheme         = "tcp",
 	    .dialer_alloc   = nni_tcp_dialer_alloc,
 	    .listener_alloc = nni_tcp_listener_alloc,

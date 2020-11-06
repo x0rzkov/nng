@@ -81,6 +81,7 @@ nni_posix_nn2sockaddr(void *sa, const nni_sockaddr *na)
 		memcpy(&spath->sun_path[1], nsabs->sa_name, nsabs->sa_len);
 		// This assumes that the only members of sockaddr_un
 		// are sa_family and sun_path.
+		spath->sun_family = PF_UNIX;
 		return (sizeof(sa_family_t) + 1 + nsabs->sa_len);
 	}
 	return (0);

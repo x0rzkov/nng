@@ -386,6 +386,20 @@ macro(nng_test NAME)
     endif ()
 endmacro()
 
+macro(nng_test_if COND NAME)
+    if (${COND} AND NNG_TESTS)
+        add_executable(${NAME} ${NAME}.c ${ARGN})
+        target_link_libraries(${NAME} ${PROJECT_NAME}_testlib)
+        target_include_directories(${NAME} PRIVATE
+                ${PROJECT_SOURCE_DIR}/tests
+                ${PROJECT_SOURCE_DIR}/src
+                ${PROJECT_SOURCE_DIR}/include)
+        add_test(NAME ${PROJECT_NAME}.${NAME} COMMAND ${NAME} -t)
+        set_tests_properties(${PROJECT_NAME}.${NAME} PROPERTIES TIMEOUT 180)
+    endif ()
+endmacro()
+
+
 function(nng_sources_testlib)
     if (NNG_TESTS)
         foreach (f ${ARGN})
