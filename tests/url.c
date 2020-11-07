@@ -15,7 +15,7 @@
 
 #include <nng/nng.h>
 
-#include "core/nng_impl.h"
+#include "core/url.h"
 
 #include "testutil.h"
 
