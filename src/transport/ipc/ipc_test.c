@@ -7,13 +7,10 @@
 // found online at https://opensource.org/licenses/MIT.
 //
 
-#include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
 #include <nng/nng.h>
 #include <nng/protocol/pair0/pair.h>
+#include <nng/transport/ipc/ipc.h>
+
 #include <testutil.h>
 
 #include <acutest.h>

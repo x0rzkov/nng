@@ -75,7 +75,7 @@ nni_posix_nn2sockaddr(void *sa, const nni_sockaddr *na)
 	case NNG_AF_ABSTRACT:
 		spath = (void *) sa;
 		nsabs = &na->s_abstract;
-		memset(spath, 0, sizeof(*nspath));
+		memset(spath, 0, sizeof(*spath));
 		spath->sun_path[0] = '\0'; // abstract starts with nul
                 NNI_ASSERT(nsabs->sa_len <= 107);
 		memcpy(&spath->sun_path[1], nsabs->sa_name, nsabs->sa_len);
